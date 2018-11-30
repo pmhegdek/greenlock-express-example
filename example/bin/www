@@ -7,27 +7,60 @@
 var app = require('../app');
 var debug = require('debug')('example:server');
 var http = require('http');
+var https = require('https');
+
+// var greenlockV1 = require('greenlock-express').create({
+//   server: 'https://acme-v01.api.letsencrypt.org/directory',
+//   challenges: { 'http-01': require('le-challenge-fs').create({ webrootPath: '/tmp/acme-challenges' }) },
+//   store: require('le-store-certbot').create({ webrootPath: '/tmp/acme-challenges' }),
+//   approveDomains: function (opts, certs, cb) {
+//     if (certs) {
+//       opts.domains = ['www.example1.com', 'www.example2.com']
+//     } else {
+//       opts.email = 'you@yourdomain.com',
+//         opts.agreeTos = true;
+//     }
+//     cb(null, { options: opts, certs: certs });
+//   }
+// });
+
+let greenlockV2 = require('greenlock-express').create({
+	version: 'draft-11',
+	server: 'https://acme-v02.api.letsencrypt.org/directory',
+	email: 'you@yourdomain.com',
+	agreeTos: true,
+	approvedDomains: ['www.example1.com', 'www.example2.com'],
+	configDir: '~/.config/acme/', // You MUST have access to write to directory where certs are saved
+	communityMember: true
+});
+let acmeChallengeHandler = greenlockV2.middleware(app);
+
+
 
 /**
  * Get port from environment and store in Express.
  */
 
 var port = normalizePort(process.env.PORT || '3000');
+var httpsPort = normalizePort(process.env.HTTPS_PORT || '3443');
 app.set('port', port);
+app.set('https', httpsPort);
 
-/**
- * Create HTTP server.
- */
 
-var server = http.createServer(app);
+// for v1
+//var server = http.createServer(greenlockV1.middleware(app));
+//var httpsServer = https.createServer(greenlockV1.middleware(app));
 
-/**
- * Listen on provided port, on all network interfaces.
- */
+server = http.createServer(acmeChallengeHandler);
+httpsServer = https.createServer(greenlockV2.httpsOptions, acmeChallengeHandler);
 
 server.listen(port);
 server.on('error', onError);
 server.on('listening', onListening);
+
+httpsServer.listen(httpsPort);
+httpsServer.on('error', onError);
+httpsServer.on('listening', onListening);
 
 /**
  * Normalize a port into a number, string, or false.
